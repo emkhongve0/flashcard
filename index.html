@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA Flashcard SRS</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SRS Flashcard">
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <h1>⚡ SRS Flashcard</h1>
+                <select id="deck-selector" onchange="onDeckChange()" style="padding: 6px; border-radius: 8px; border: 1px solid #ccc; font-size: 0.8rem; font-weight: 700; background: var(--card-bg); color: var(--text-main);">
+                    <option value="all">🌐 Tất cả chủ đề</option>
+                </select>
+            </div>
+            <div class="header-right">
+                <div class="stats">
+                    <span>Thuộc: <strong id="mastered-count">0</strong></span>
+                    <span>Cần ôn: <strong id="review-count">0</strong></span>
+                </div>
+                <button class="btn-settings-toggle" onclick="toggleSettingsPanel()">⚙️</button>
+            </div>
+        </header>
+
+        <div id="settings-panel" class="settings-panel hidden">
+            <div class="panel-header">
+                <h4>Cấu hình ứng dụng</h4>
+                <button onclick="toggleSettingsPanel()">✕</button>
+            </div>
+            <div class="panel-content">
+                <div class="setting-item">
+                    <span>Giao diện Tối/Sáng</span>
+                    <button id="theme-toggle" onclick="toggleTheme()">🌓 Đổi màu</button>
+                </div>
+
+                <div class="setting-item">
+                    <span>Đảo chiều lật thẻ (Việt ➔ Anh)</span>
+                    <label class="switch-container" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+                        <input type="checkbox" id="reverse-toggle-checkbox" onchange="toggleReverseMode()" style="opacity: 0; width: 0; height: 0;">
+                        <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 24px;"></span>
+                    </label>
+                </div>
+
+                <div class="setting-item" id="reminder-item-container">
+                    <span>Nhắc nhở học tập</span>
+                    </div>
+                <div class="setting-item-group">
+                    <button onclick="triggerImport()">📥 Nhập Data (JSON)</button>
+                    <button onclick="exportData()">📤 Xuất Data (JSON)</button>
+                </div>
+                <input type="file" id="import-file" style="display:none" accept=".json" onchange="handleImport(event)">
+            </div>
+        </div>
+
+        <nav class="actions">
+            <button id="nav-study" class="active" onclick="switchTab('study')">📖 Học từ</button>
+            <button id="nav-quiz" onclick="switchTab('quiz')">🧩 Trắc nghiệm</button>
+            <button id="nav-starred" onclick="switchTab('starred')">⭐ Từ khó</button>
+            <button id="nav-manage" onclick="switchTab('manage')">📝 Thêm từ</button>
+            <button id="nav-analytics" onclick="switchTab('analytics')">📊 Thống kê</button>
+            
+        </nav>
+
+        <div id="tab-study" class="tab-content">
+            <div style="text-align: center; margin-bottom: 10px;">
+                <button id="btn-autoplay" onclick="toggleAutoPlay()" style="background: var(--primary-light); color: var(--primary); border: none; padding: 10px 20px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: all 0.2s;">⏱️ Lướt rảnh tay</button>
+            </div>
+
+            <main class="card-container">
+                <div class="flashcard" id="flashcard" onclick="flipCard()">
+                    <div class="card-face card-front">
+                        <span class="star-icon" id="star-btn" onclick="toggleStar(event)">☆</span>
+                        <h2 id="word-display">Loading...</h2>
+                        <p id="ipa-display" class="ipa">/ipa/</p>
+                        <button class="audio-btn" onclick="playAudio(event)">🔊 Nghe</button>
+                        <p class="hint">Chạm để xem nghĩa</p>
+                    </div>
+                    <div class="card-face card-back">
+                        <h3 id="meaning-display">Nghĩa của từ</h3>
+                        <p id="example-display" class="example">Ví dụ ngắn</p>
+                    </div>
+                </div>
+            </main>
+            <footer class="controls hidden" id="controls">
+                <button class="btn hard" onclick="submitSRS(1)">Quên (1đ)</button>
+                <button class="btn good" onclick="submitSRS(3)">Nhớ (3đ)</button>
+                <button class="btn easy" onclick="submitSRS(7)">Dễ (7đ)</button>
+            </footer>
+        </div>
+
+        <div id="tab-manage" class="tab-content hidden">
+            <section class="form-container">
+                <h3>Thêm / Sửa Từ Vựng</h3>
+                <input type="hidden" id="form-id">
+
+                <input type="text" id="form-deck" placeholder="Chủ đề / Bộ từ (Ví dụ: TOEIC, Giao tiếp)">
+                
+                <div class="search-group">
+                    <input type="text" id="form-word" placeholder="Từ mới (Ví dụ: Apple)">
+                    <button class="btn-search" onclick="autoSuggestWord()">🔍 Tra nhanh</button>
+                </div>
+
+                <input type="text" id="form-ipa" placeholder="Phát âm IPA">
+                <input type="text" id="form-meaning" placeholder="Giải nghĩa">
+                <textarea id="form-example" placeholder="Ví dụ ngắn..."></textarea>
+                <div class="form-buttons">
+                    <button class="btn-save" onclick="saveFormCard()">💾 Lưu từ</button>
+                    <button class="btn-cancel" onclick="clearForm()">Hủy</button>
+                </div>
+            </section>
+
+            <section class="list-container">
+                <h3>Danh sách từ hiện có</h3>
+                <div class="search-bar-container" style="display: flex; gap: 6px; margin-bottom: 12px;">
+                    <input type="text" id="search-word-input" oninput="handleSearchInput()" placeholder="🔍 Nhập từ hoặc nghĩa để tìm nhanh..." style="margin-bottom: 0; padding: 10px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); width: 100%; font-size: 0.9rem;">
+                    <button onclick="clearSearch()" style="background: var(--bg); border: none; padding: 0 12px; border-radius: 10px; cursor: pointer; color: var(--text-sub); font-weight: bold;">✕</button>
+                </div>
+                <ul id="words-list"></ul>
+            </section>
+        </div>
+
+        <div id="tab-starred" class="tab-content hidden">
+            <section class="list-container">
+                <h3>⭐ Danh sách từ khó đã lưu</h3>
+                <ul id="starred-words-list"></ul>
+            </section>
+        </div>
+        <div id="tab-analytics" class="tab-content hidden">
+            <div class="list-container">
+                <h3>📊 Tiến độ học tập trực quan</h3>
+                <div style="display: flex; justify-content: space-around; margin-bottom: 20px; font-weight: 700; text-align: center;">
+                    <div>Tổng số từ<br><span id="ana-total" style="font-size: 1.5rem; color: var(--primary);">0</span></div>
+                    <div>Đã thuộc lòng<br><span id="ana-mastered" style="font-size: 1.5rem; color: var(--success);">0</span></div>
+                </div>
+                
+                <div style="position: relative; height: 220px; width: 100%;">
+                    <canvas id="progressPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-quiz" class="tab-content hidden">
+            <div id="quiz-msg"></div>
+            <div id="quiz-question-container" class="form-container" style="text-align: center; padding: 30px 20px;">
+                <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-sub); letter-spacing: 1px; font-weight: 700;">Từ này có nghĩa là gì?</span>
+                <h2 id="quiz-word" style="font-size: 2.4rem; margin: 10px 0 2px 0; font-weight: 800;">Word</h2>
+                <p id="quiz-ipa" class="ipa" style="margin-bottom: 25px;">/ipa/</p>
+                
+                <div id="quiz-options" style="display: flex; flex-direction: column; gap: 12px; width: 100%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="gamification.js"></script>
+    <script src="analytics.js"></script>
+    <script src="quiz.js"></script>
+    <script src="decks.js"></script> <script src="app.js"></script>
+    <script src="search.js"></script> <script src="app.js"></script>
+    <script src="autoplay.js"></script> <script src="app.js"></script>
+    <script src="reverse.js"></script> <script src="app.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
