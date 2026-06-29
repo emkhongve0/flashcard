@@ -727,12 +727,32 @@ async function autoSuggestWord() {
         btnSearch.disabled = false;
     }
 
-    // Đăng ký Service Worker nằm gọn gàng bên trong đuôi hàm của bạn
+    // Thay thế đoạn đăng ký Service Worker cũ ở cuối file bằng đoạn này:
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('Service Worker đã sẵn sàng!', reg.scope))
-                .catch(err => console.log('Lỗi đăng ký Service Worker:', err));
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => {
+                console.log('Service Worker đã sẵn sàng!', reg.scope);
+                
+                // 🔥 LOGIC TỰ ĐỘNG PHÁT HIỆN CODE MỚI TRÊN GITHUB VÀ ÉP REFRESH TRÊN IPHONE
+                reg.onupdatefound = () => {
+                    const installingWorker = reg.installing;
+                    if (installingWorker == null) return;
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed') {
+                            if (navigator.serviceWorker.controller) {
+                                // Nếu phát hiện có code mới vừa được deploy lên GitHub
+                                console.log('Đã có phiên bản mới, đang tự động cập nhật...');
+                                setTimeout(() => {
+                                    window.location.reload(); // Tự động làm mới trang để ăn code mới
+                                }, 500);
+                            }
+                        }
+                    };
+                };
+            })
+            .catch(err => console.log('Lỗi đăng ký Service Worker:', err));
         });
+    
     }
 }
