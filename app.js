@@ -481,16 +481,42 @@ async function renderWordsList(resetToPageOne = false) {
     const endIndex = startIndex + CARDS_PER_PAGE;
     const cardsToDisplay = cards.slice(startIndex, endIndex);
 
-    // 4. HIỂN THỊ CÁC TỪ VỰNG TRÊN TRANG HIỆN TẠI (GIỮ NGUYÊN GIAO DIỆN CŨ)
+    // 4. HIỂN THỊ CÁC TỪ VỰNG TRÊN TRANG HIỆN TẠI (ĐÃ TỐI ƯU CỐ ĐỊNH CHỦ ĐỀ DÀI)
     cardsToDisplay.forEach(card => {
-        const deckTag = card.deck ? `<span style="font-size:0.7rem; background:#e1bee7; color:#6a1b9a; padding:2px 6px; border-radius:4px; margin-left:5px; font-weight: bold;">${card.deck}</span>` : '';
+        // Tối ưu tag chủ đề: cố định độ rộng tối đa, nếu dài quá tự động chuyển thành dấu 3 chấm (...)
+        const deckTag = card.deck 
+            ? `<span style="
+                display: inline-block;
+                max-width: 100px; 
+                vertical-align: middle;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-size: 0.7rem; 
+                background: #e1bee7; 
+                color: #6a1b9a; 
+                padding: 2px 6px; 
+                border-radius: 4px; 
+                margin-left: 5px; 
+                font-weight: bold;
+               " title="${card.deck}">${card.deck}</span>` 
+            : '';
+
         const li = document.createElement("li");
+        
+        // Cấu hình flexbox cho dòng để chữ bên trái và nút bấm bên phải luôn cân xứng, không bị đẩy lệch
+        li.style = "display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box;";
+        
         li.innerHTML = `
-            <div>
-                <strong>${card.word}</strong> <small>${card.ipa || ''}</small> ${deckTag}
-                <div style="font-size: 0.9rem; color: var(--text-sub); margin-top: 2px;">${card.meaning}</div>
+            <div style="flex: 1; min-width: 0; padding-right: 10px;">
+                <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 2px;">
+                    <strong style="font-size: 1.05rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">${card.word}</strong>
+                    <small style="color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${card.ipa || ''}</small>
+                    ${deckTag}
+                </div>
+                <div style="font-size: 0.9rem; color: var(--text-sub); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${card.meaning}</div>
             </div>
-            <div class="list-actions">
+            <div class="list-actions" style="flex-shrink: 0; display: flex; gap: 5px;">
                 <button class="btn-edit" onclick="editCard(${card.id})">✏️</button>
                 <button class="btn-delete" onclick="deleteCard(${card.id})">🗑️</button>
             </div>
