@@ -188,6 +188,17 @@ function saveCurrentProgress() {
 // 4. HIỂN THỊ TỪ TIẾP THEO LÊN GIAO DIỆN (CHẾ ĐỘ THƯỜNG / GÕ / ĐẢO CHIỀU)
 // ==========================================
 function showNextCard() {
+    // 1. ÉP THẺ FLASHCARD XOAY VỀ MẶT TRƯỚC (TIẾNG ANH) TRƯỚC KHI HIỆN TỪ MỚI
+    const cardEl = document.getElementById("flashcard");
+    if (cardEl) {
+        cardEl.classList.remove("is-flipped");
+    }
+    
+    // 2. ẨN THANH ĐIỀU KHIỂN SRS (CHỈ HIỆN LẠI KHI NGƯỜI DÙNG BẤM LẬT THẺ)
+    const controls = document.getElementById("controls");
+    if (controls) {
+        controls.classList.add("hidden");
+    }
     if (reviewQueue.length === 0) {
         currentCard = null;
         localStorage.removeItem("saved_review_queue");
