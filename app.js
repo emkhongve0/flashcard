@@ -1,7 +1,66 @@
+// ==========================================
+// ☁️ KHỞI TẠO ĐỒNG BỘ CLOUD FIREBASE TRỰC TUYẾN
+// ==========================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCT3kTdui6BAuMLmOw0dQYZ7i0lpHYXw5k",
+  authDomain: "flashcardsrs-75036.firebaseapp.com",
+  databaseURL: "https://flashcardsrs-75036-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "flashcardsrs-75036",
+  storageBucket: "flashcardsrs-75036.firebasestorage.app",
+  messagingSenderId: "433045822063",
+  appId: "1:433045822063:web:09362659c1e580872acb9a",
+  measurementId: "G-9H2GQJKN8S"
+};
+
+// Khởi tạo Firebase bằng SDK Compat nhúng từ CDN index.html
+firebase.initializeApp(firebaseConfig);
+const rtdb = firebase.database();
+
+// Hàm đẩy dữ liệu tự động từ IndexedDB lên Cloud (Âm thầm chạy nền khi Thêm/Sửa/Xóa)
+async function syncLocalToCloud() {
+    try {
+        if (typeof getAllCards === "function") {
+            const localCards = await getAllCards();
+            await rtdb.ref("my_flashcards").set(localCards);
+            console.log("☁️ Đã sao lưu đồng bộ lên Cloud Firebase thành công!");
+        }
+    } catch (error) {
+        console.error("Lỗi đồng bộ Cloud:", error);
+    }
+}
+
+// Hàm khôi phục dữ liệu từ đám mây về máy (Chỉ chạy khi người dùng chủ động bấm nút)
+async function pullCloudToLocal() {
+    try {
+        const snapshot = await rtdb.ref("my_flashcards").once("value");
+        const cloudCards = snapshot.val();
+        if (cloudCards && Array.isArray(cloudCards)) {
+            if (confirm(`Tìm thấy ${cloudCards.length} từ vựng trên đám mây. Bạn có chắc muốn ghi đè lên thiết bị này không?`)) {
+                const tx = db.transaction("cards", "readwrite");
+                const store = tx.objectStore("cards");
+                store.clear();
+                
+                for (let card of cloudCards) {
+                    if (card) store.add(card);
+                }
+                
+                alert("🎉 Đã khôi phục thành công " + cloudCards.length + " từ vựng từ đám mây!");
+                window.location.reload();
+            }
+        } else {
+            alert("Không tìm thấy dữ liệu sao lưu nào trên đám mây.");
+        }
+    } catch (error) {
+        alert("Lỗi tải dữ liệu từ đám mây: " + error.message);
+    }
+}
+
+// ==========================================
+// 1. KHỞI TẠO CƠ SỞ DỮ LIỆU INDEXEDDB OFFLINE (GIỮ NGUYÊN GIÁ TRỊ GỐC)
+// ==========================================
 const DB_NAME = "FlashcardSRS_DB";
 let db;
 
-// 1. KHỞI TẠO CƠ SỞ DỮ LIỆU INDEXEDDB OOFFLINE
 const request = indexedDB.open(DB_NAME, 1);
 request.onupgradeneeded = (e) => {
     db = e.target.result;
@@ -19,88 +78,80 @@ let reviewQueue = [];
 let isReviewMode = true; // true: Ôn tập đúng hạn SRS | false: Học tự do lặp vòng
 
 async function initApp() {
-    // Đã loại bỏ hoàn toàn dữ liệu mẫu ban đầu (Hello, PWA) giúp app trống sạch 100%
     await refreshQueue();
     await renderWordsList();
 }
 
-// 2. LOGIC ĐIỀU HƯỚNG TABS
+// ==========================================
+// 2. LOGIC ĐIỀU HƯỚNG TABS (BẢO TOÀN TẤT CẢ LIÊN KẾT NGOÀI)
+// ==========================================
 function switchTab(tabName) {
-
-    // Tự động tắt chế độ lướt rảnh tay nếu người dùng chuyển Tab
     if (typeof stopAutoPlay === "function") stopAutoPlay();
-    // Ẩn hiện các Tab nội dung
+    
     document.getElementById("tab-study").classList.toggle("hidden", tabName !== 'study');
     document.getElementById("tab-manage").classList.toggle("hidden", tabName !== 'manage');
     document.getElementById("tab-starred").classList.toggle("hidden", tabName !== 'starred');
     document.getElementById("tab-analytics").classList.toggle("hidden", tabName !== 'analytics');
-    document.getElementById("tab-quiz").classList.toggle("hidden", tabName !== 'quiz'); // Thêm dòng này
+    document.getElementById("tab-quiz").classList.toggle("hidden", tabName !== 'quiz');
     
-    // Cập nhật trạng thái bật sáng (Active) trên thanh Menu điều hướng
     document.getElementById("nav-study").classList.toggle("active", tabName === 'study');
     document.getElementById("nav-starred").classList.toggle("active", tabName === 'starred');
     document.getElementById("nav-manage").classList.toggle("active", tabName === 'manage');
     document.getElementById("nav-analytics").classList.toggle("active", tabName === 'analytics');
-    document.getElementById("nav-quiz").classList.toggle("active", tabName === 'quiz'); // Thêm dòng này
+    document.getElementById("nav-quiz").classList.toggle("active", tabName === 'quiz');
     
     if (tabName === 'manage') renderWordsList();
     if (tabName === 'starred') renderStarredList();
     if (tabName === 'analytics') initAnalytics();
-    if (tabName === 'quiz') initQuiz(); // Thêm dòng này để khởi tạo câu hỏi trắc nghiệm
+    if (tabName === 'quiz') initQuiz(); 
     if (tabName === 'study') refreshQueue();
     
-    // Tự động đóng panel cài đặt lại nếu người dùng chuyển tab
     document.getElementById("settings-panel").classList.add("hidden");
 }
 
-// Logic đóng mở Panel cài đặt phụ
 function toggleSettingsPanel() {
     const panel = document.getElementById("settings-panel");
     panel.classList.toggle("hidden");
 }
 
-// 3. TÍNH TOÁN HÀNG ĐỢI HỌC TỪ (ĐÃ ĐỒNG BỘ CHỦ ĐỀ)
+// ==========================================
+// 3. TÍNH TOÁN HÀNG ĐỢI HỌC TỪ (ĐÃ ĐỒNG BỘ CHỦ ĐỀ VÀ TIẾN TRÌNH)
+// ==========================================
 async function refreshQueue() {
     let cards = await getAllCards();
     const now = Date.now();
     
-    // BỘ LỌC CHỦ ĐỀ: Nếu đang chọn một chủ đề cụ thể, chỉ lấy từ của chủ đề đó
     if (typeof currentSelectedDeck !== "undefined" && currentSelectedDeck !== "all") {
         cards = cards.filter(c => c.deck === currentSelectedDeck);
     }
 
-    // ĐỌC TIẾN TRÌNH CŨ TỪ LOCALSTORAGE
     const savedQueue = localStorage.getItem("saved_review_queue");
     const savedCurrentCardId = localStorage.getItem("saved_current_card_id");
     const savedDeckContext = localStorage.getItem("saved_deck_context") || "all";
 
-    // Khôi phục lại nếu có hàng đợi cũ đang học dở và cùng đúng Chủ đề (Deck) đang chọn
     if (savedQueue && savedDeckContext === (currentSelectedDeck || "all")) {
         try {
             reviewQueue = JSON.parse(savedQueue);
             isReviewMode = localStorage.getItem("saved_review_mode") === "true";
             
             if (savedCurrentCardId) {
-                // Ép kiểu ID về Number nếu ID trong DB của bạn là số tăng tự động
                 const numericId = Number(savedCurrentCardId);
                 currentCard = cards.find(c => c.id === numericId || c.id === savedCurrentCardId) || reviewQueue[0];
             } else {
                 currentCard = reviewQueue[0];
             }
 
-            // Cập nhật con số hiển thị lên giao diện thanh trạng thái
             document.getElementById("review-count").innerText = isReviewMode ? reviewQueue.length : `Tự do (${reviewQueue.length})`;
             const masteredCount = cards.filter(c => c.interval >= 14).length;
             document.getElementById("mastered-count").innerText = masteredCount;
 
             renderCurrentCardState(); 
-            return; // Dừng lại tại đây, lấy tiến trình cũ học tiếp
+            return; 
         } catch (e) {
             console.error("Lỗi đồng bộ bộ nhớ, khởi tạo hàng đợi mới:", e);
         }
     }
     
-    // NẾU KHÔNG CÓ TIẾN TRÌNH CŨ: Tiến hành tính toán hàng đợi mới từ đầu như cũ
     reviewQueue = cards.filter(c => c.nextReview <= now);
     
     const masteredCount = cards.filter(c => c.interval >= 14).length;
@@ -126,7 +177,6 @@ async function refreshQueue() {
     renderCurrentCardState();
 }
 
-// Hàm bổ trợ: Ghi tiến trình hiện tại vào LocalStorage
 function saveCurrentProgress() {
     localStorage.setItem("saved_review_queue", JSON.stringify(reviewQueue));
     localStorage.setItem("saved_current_card_id", currentCard ? currentCard.id : "");
@@ -134,7 +184,9 @@ function saveCurrentProgress() {
     localStorage.setItem("saved_deck_context", currentSelectedDeck || "all");
 }
 
-// 4. HIỂN THỊ TỪ TIẾP THEO LÊN GIAO DIỆN (ĐÃ TÁCH BIỆT LOGIC HIỂN THỊ)
+// ==========================================
+// 4. HIỂN THỊ TỪ TIẾP THEO LÊN GIAO DIỆN (CHẾ ĐỘ THƯỜNG / GÕ / ĐẢO CHIỀU)
+// ==========================================
 function showNextCard() {
     if (reviewQueue.length === 0) {
         currentCard = null;
@@ -145,10 +197,9 @@ function showNextCard() {
     }
     
     renderCurrentCardState();
-    saveCurrentProgress(); // Đồng bộ ngay sau khi đổi thẻ
+    saveCurrentProgress(); 
 }
 
-    // Hàm chuyên trách xử lý giao diện thẻ (Lồng ghép chuẩn xác Chế độ gõ chữ và Đảo chiều)
 function renderCurrentCardState() {
     const wordEl = document.getElementById("word-display");
     const ipaEl = document.getElementById("ipa-display");
@@ -169,18 +220,15 @@ function renderCurrentCardState() {
         return;
     }
     
-    // Hiển thị và xử lý ngôi sao từ khó
     if (starBtn) {
         starBtn.style.display = "block";
         starBtn.innerText = currentCard.isStarred ? "★" : "☆";
         starBtn.className = currentCard.isStarred ? "star-icon active" : "star-icon";
     }
 
-    // Reset sạch ô nhập chính tả của phiên học trước
     if (document.getElementById("typing-input")) document.getElementById("typing-input").value = "";
     if (document.getElementById("typing-result")) document.getElementById("typing-result").innerText = "";
 
-    // TRƯỜNG HỢP 1: ĐANG BẬT CHẾ ĐỘ GÕ CHỮ (TYPING MODE)
     if (typeof isTypingMode !== "undefined" && isTypingMode === true) {
         if (typingArea) typingArea.classList.remove("hidden");
         if (wordEl) wordEl.innerText = currentCard.meaning;
@@ -197,11 +245,9 @@ function renderCurrentCardState() {
         if (exampleEl) exampleEl.innerText = currentCard.example || "Không có ví dụ.";
 
     } else {
-        // TRƯỜNG HỢP 2: KHÔNG BẬT GÕ CHỮ (HIỂN THỊ FLASHCARD THƯỜNG HOẶC ĐẢO CHIỀU)
         if (typingArea) typingArea.classList.add("hidden");
 
         if (typeof isReverseMode !== "undefined" && isReverseMode === true) {
-            // Chế độ đảo chiều Việt -> Anh
             if (wordEl) wordEl.innerText = currentCard.meaning;
             if (ipaEl) ipaEl.innerText = "Nghĩ từ tiếng Anh tương ứng...";
             if (audioBtn) audioBtn.style.display = "none";
@@ -215,7 +261,6 @@ function renderCurrentCardState() {
             }
             if (exampleEl) exampleEl.innerText = currentCard.example || "Không có ví dụ.";
         } else {
-            // Chế độ mặc định Anh -> Việt
             if (wordEl) wordEl.innerText = currentCard.word;
             if (ipaEl) ipaEl.innerText = currentCard.ipa || "/.../";
             if (audioBtn) audioBtn.style.display = "inline-block";
@@ -236,9 +281,12 @@ function flipCard() {
         controls.classList.toggle("hidden", !cardEl.classList.contains("is-flipped"));
     }
 }
-// 5. ĐÁNH DẤU SAO / TỪ KHÓ TRÊN THẺ
+
+// ==========================================
+// 5. ĐÁNH DẤU SAO VÀ LOGIC PHÁT ÂM (GIỌNG MỸ)
+// ==========================================
 async function toggleStar(event) {
-    event.stopPropagation(); // Ngăn hành vi lật thẻ khi bấm vào ngôi sao
+    event.stopPropagation(); 
     if (!currentCard) return;
     currentCard.isStarred = !currentCard.isStarred;
     await updateCardInDB(currentCard);
@@ -250,45 +298,30 @@ function playAudio(event) {
     event.stopPropagation();
     if (!currentCard || !currentCard.word) return;
 
-    // Tắt các âm thanh đang đọc dở để tránh bị nói đè lên nhau
     window.speechSynthesis.cancel();
-
     const utterance = new SpeechSynthesisUtterance(currentCard.word);
     
-    // 1. Cấu hình các thông số cơ bản cho giọng Mỹ chuẩn
     utterance.lang = 'en-US';
-    utterance.rate = 0.9;  // Tốc độ đọc (0.9 là vừa vặn, dễ nghe để học từ vựng)
-    utterance.pitch = 1.0; // Độ cao của giọng
+    utterance.rate = 0.9;  
+    utterance.pitch = 1.0; 
 
-    // 2. LOGIC THÔNG MINH ÉP IPHONE DÙNG GIỌNG GỐC TIẾNG ANH (Sửa lỗi ngọng trên iOS)
     if (typeof window.speechSynthesis.getVoices === "function") {
         const voices = window.speechSynthesis.getVoices();
-        
-        // Tìm các giọng nói tiếng Anh Mỹ (en-US) chất lượng cao trong iPhone
-        // Ưu tiên tìm giọng "Samantha", "Siri" hoặc giọng chứa chữ "Google" nếu dùng Chrome
         let selectedVoice = voices.find(v => v.lang.includes('en-US') && (v.name.includes('Samantha') || v.name.includes('Siri')));
         
-        // Nếu không có Samantha/Siri, lấy đại một giọng en-US bất kỳ
         if (!selectedVoice) {
             selectedVoice = voices.find(v => v.lang.includes('en-US'));
         }
-        
-        // Nếu vẫn không thấy en-US (hy hữu), lấy giọng tiếng Anh chung (en-) như Anh-Anh (en-GB)
         if (!selectedVoice) {
             selectedVoice = voices.find(v => v.lang.startsWith('en-'));
         }
-
-        // Gán giọng chuẩn tìm được vào bộ phát âm
         if (selectedVoice) {
             utterance.voice = selectedVoice;
         }
     }
-
-    // Kích hoạt phát âm
     window.speechSynthesis.speak(utterance);
 }
 
-// Gửi kết quả đánh giá khoảng cách SRS
 async function submitSRS(days) {
     if (!currentCard) return;
     
@@ -297,18 +330,15 @@ async function submitSRS(days) {
     await updateCardInDB(currentCard);
 
     if (isReviewMode) {
-        reviewQueue.shift(); // Ôn xong thì xóa khỏi danh sách ôn hôm nay
+        reviewQueue.shift(); 
     } else {
-        // Chế độ tự do: Đẩy xuống cuối hàng đợi tạo vòng lặp vô tận
         const shifted = reviewQueue.shift();
         reviewQueue.push(shifted);
     }
 
-    // Kiểm tra xem hàng đợi hiện tại có rỗng không
     if (reviewQueue.length === 0) {
         await refreshQueue();
     } else {
-        // KIỂM TRA BẢO VỆ: Nếu người dùng vừa đổi chủ đề giữa chừng, đảm bảo từ tiếp theo phải thuộc đúng chủ đề đó
         if (typeof currentSelectedDeck !== "undefined" && currentSelectedDeck !== "all" && reviewQueue[0].deck !== currentSelectedDeck) {
             await refreshQueue();
         } else {
@@ -317,14 +347,16 @@ async function submitSRS(days) {
     }
 }
 
-// 6. THAO TÁC QUẢN LÝ (CRUD - THÊM / SỬA / XÓA) - ĐÃ BỔ SUNG ĐỒNG BỘ GỢI Ý CHỦ ĐỀ
+// ==========================================
+// 6. THAO TÁC QUẢN LÝ TỪ VỰNG (FORM THÊM / SỬA / XÓA)
+// ==========================================
 async function saveFormCard() {
     const id = document.getElementById("form-id").value;
     const word = document.getElementById("form-word").value.trim();
     const ipa = document.getElementById("form-ipa").value.trim();
     const meaning = document.getElementById("form-meaning").value.trim();
     const example = document.getElementById("form-example").value.trim();
-    const deck = document.getElementById("form-deck").value.trim() || "Chung"; // Mặc định là nhóm Chung nếu bỏ trống
+    const deck = document.getElementById("form-deck").value.trim() || "Chung"; 
 
     if (!word || !meaning) {
         alert("Vui lòng điền ít nhất là Từ mới và Giải nghĩa!");
@@ -340,7 +372,6 @@ async function saveFormCard() {
         await addCardToDB(newCard);
     }
 
-    // BƯỚC 3: CẬP NHẬT GỢI Ý THÔNG MINH CHO CẢ HEADER VÀ FORM DATALIST NGAY LẬP TỨC
     if (typeof refreshDeckSelector === "function") {
         await refreshDeckSelector();
     }
@@ -358,7 +389,6 @@ async function editCard(id) {
     document.getElementById("form-ipa").value = card.ipa;
     document.getElementById("form-meaning").value = card.meaning;
     document.getElementById("form-example").value = card.example;
-    // Tự động cuộn mượt lên khung nhập liệu để người dùng dễ thao tác
     document.querySelector(".form-container").scrollIntoView({ behavior: 'smooth' });
     document.getElementById("form-deck").value = card.deck || "";
 }
@@ -366,12 +396,9 @@ async function editCard(id) {
 async function deleteCard(id) {
     if (confirm("Bạn có chắc chắn muốn xóa từ này khỏi kho dữ liệu không?")) {
         await deleteCardFromDB(id);
-        
-        // CẬP NHẬT LẠI GỢI Ý (Nếu xóa từ cuối cùng của chủ đề đó, chủ đề sẽ biến mất khỏi gợi ý)
         if (typeof refreshDeckSelector === "function") {
             await refreshDeckSelector();
         }
-        
         await renderWordsList();
     }
 }
@@ -385,52 +412,30 @@ function clearForm() {
     document.getElementById("form-deck").value = "";
 }
 
-async function editCard(id) {
-    const card = await getCardById(id);
-    if (!card) return;
-    document.getElementById("form-id").value = card.id;
-    document.getElementById("form-word").value = card.word;
-    document.getElementById("form-ipa").value = card.ipa;
-    document.getElementById("form-meaning").value = card.meaning;
-    document.getElementById("form-example").value = card.example;
-    // Tự động cuộn mượt lên khung nhập liệu để người dùng dễ thao tác
-    document.querySelector(".form-container").scrollIntoView({ behavior: 'smooth' });
-    document.getElementById("form-deck").value = card.deck || "";
-}
+let currentPage = 1;
+const CARDS_PER_PAGE = 30; // Mỗi trang hiển thị tối đa 30 từ giúp điện thoại chạy siêu mượt
 
-async function deleteCard(id) {
-    if (confirm("Bạn có chắc chắn muốn xóa từ này khỏi kho dữ liệu không?")) {
-        await deleteCardFromDB(id);
-        await renderWordsList();
+async function renderWordsList(resetToPageOne = false) {
+    if (resetToPageOne) {
+        currentPage = 1; // Khởi động lại về trang đầu nếu người dùng gõ tìm kiếm hoặc đổi bộ lọc
     }
-}
 
-function clearForm() {
-    document.getElementById("form-id").value = "";
-    document.getElementById("form-word").value = "";
-    document.getElementById("form-ipa").value = "";
-    document.getElementById("form-meaning").value = "";
-    document.getElementById("form-example").value = "";
-    document.getElementById("form-deck").value = "";
-}
-
-async function renderWordsList() {
-    // 1. Lấy chuỗi từ khóa tìm kiếm người dùng nhập vào (nếu có)
     const searchInput = document.getElementById("search-word-input");
     const keyword = searchInput ? searchInput.value.trim().toLowerCase() : "";
     
-    // 2. Lấy toàn bộ kho từ vựng từ cơ sở dữ liệu IndexedDB
     let cards = await getAllCards();
     const listEl = document.getElementById("words-list");
+    const paginationEl = document.getElementById("pagination-container");
+    
     if (!listEl) return;
     listEl.innerHTML = "";
 
-    // 3. BỘ LỌC CHỦ ĐỀ: Nếu đang chọn một chủ đề cụ thể, chỉ lấy từ của chủ đề đó
+    // 1. ÁP DỤNG BỘ LỌC CHỦ ĐỀ CŨ CỦA BẠN
     if (typeof currentSelectedDeck !== "undefined" && currentSelectedDeck !== "all") {
         cards = cards.filter(c => c.deck === currentSelectedDeck);
     }
 
-    // 4. BỘ LỌC TÌM KIẾM: Nếu người dùng có gõ từ khóa, lọc theo Từ gốc, Phiên âm hoặc Giải nghĩa
+    // 2. ÁP DỤNG BỘ LỌC TÌM KIẾM THEO TỪ KHÓA CŨ CỦA BẠN
     if (keyword) {
         cards = cards.filter(card => {
             const word = (card.word || "").toLowerCase();
@@ -445,14 +450,28 @@ async function renderWordsList() {
         });
     }
 
-    // 5. Nếu sau khi lọc không tìm thấy từ nào, hiển thị thông báo
+    // Nếu không có từ nào, ẩn thanh phân trang đi và báo trống
     if (cards.length === 0) {
         listEl.innerHTML = `<li style="text-align: center; color: var(--text-sub); justify-content: center; padding: 20px;">🔍 Không tìm thấy từ vựng nào khớp với từ khóa.</li>`;
+        if (paginationEl) paginationEl.innerHTML = "";
         return;
     }
 
-    // 6. Vẽ danh sách từ vựng ra giao diện HTML như cũ
-    cards.forEach(card => {
+    // 3. LOGIC XỬ LÝ PHÂN TRANG (PAGINATION CORNER)
+    const totalCards = cards.length;
+    const totalPages = Math.ceil(totalCards / CARDS_PER_PAGE);
+
+    // Đảm bảo số trang hiện tại không vượt quá tổng số trang khi dữ liệu bị xóa bớt
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+
+    // Cắt danh sách từ để chỉ lấy đúng số lượng của trang hiện tại
+    const startIndex = (currentPage - 1) * CARDS_PER_PAGE;
+    const endIndex = startIndex + CARDS_PER_PAGE;
+    const cardsToDisplay = cards.slice(startIndex, endIndex);
+
+    // 4. HIỂN THỊ CÁC TỪ VỰNG TRÊN TRANG HIỆN TẠI (GIỮ NGUYÊN GIAO DIỆN CŨ)
+    cardsToDisplay.forEach(card => {
         const deckTag = card.deck ? `<span style="font-size:0.7rem; background:#e1bee7; color:#6a1b9a; padding:2px 6px; border-radius:4px; margin-left:5px; font-weight: bold;">${card.deck}</span>` : '';
         const li = document.createElement("li");
         li.innerHTML = `
@@ -467,9 +486,39 @@ async function renderWordsList() {
         `;
         listEl.appendChild(li);
     });
+
+    // 5. TỰ ĐỘNG SINH GIAO DIỆN ĐIỀU HƯỚNG PHÂN TRANG (NÚT TRƯỚC/SAU VÀ SỐ TRANG)
+    if (paginationEl) {
+        paginationEl.innerHTML = "";
+        if (totalPages <= 1) return; // Nếu chỉ có 1 trang thì không cần hiện thanh chuyển trang
+
+        // Nút lùi lại (Trang trước)
+        const prevBtn = document.createElement("button");
+        prevBtn.innerText = "◀";
+        prevBtn.disabled = currentPage === 1;
+        prevBtn.style = `padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: ${currentPage === 1 ? '#ccc' : 'var(--card-bg)'}; color: var(--text-main); cursor: pointer;`;
+        prevBtn.onclick = () => { currentPage--; renderWordsList(); };
+        paginationEl.appendChild(prevBtn);
+
+        // Chữ hiển thị thông số trang (ví dụ: Trang 2 / 10)
+        const pageInfo = document.createElement("span");
+        pageInfo.innerText = `Trang ${currentPage} / ${totalPages}`;
+        pageInfo.style = "font-weight: bold; color: var(--text-main); font-size: 0.95rem;";
+        paginationEl.appendChild(pageInfo);
+
+        // Nút tiến lên (Trang sau)
+        const nextBtn = document.createElement("button");
+        nextBtn.innerText = "▶";
+        nextBtn.disabled = currentPage === totalPages;
+        nextBtn.style = `padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: ${currentPage === totalPages ? '#ccc' : 'var(--card-bg)'}; color: var(--text-main); cursor: pointer;`;
+        nextBtn.onclick = () => { currentPage++; renderWordsList(); };
+        paginationEl.appendChild(nextBtn);
+    }
 }
 
+// ==========================================
 // 7. QUẢN LÝ DANH SÁCH TỪ ĐÃ ĐÁNH DẤU SAO
+// ==========================================
 async function renderStarredList() {
     const cards = await getAllCards();
     const starredListEl = document.getElementById("starred-words-list");
@@ -506,7 +555,9 @@ async function unstarFromList(id) {
     }
 }
 
-// 8. TƯƠNG TÁC INDEXEDDB CORE
+// ==========================================
+// 8. TƯƠNG TÁC INDEXEDDB CORE - TÍCH HỢP ĐẨY TỰ ĐỘNG LÊN CLOUD
+// ==========================================
 function getAllCards() {
     return new Promise(r => {
         const store = db.transaction("cards", "readonly").objectStore("cards");
@@ -521,21 +572,32 @@ function getCardById(id) {
 }
 function addCardToDB(card) {
     return new Promise(r => {
-        db.transaction("cards", "readwrite").objectStore("cards").add(card).onsuccess = () => r();
+        db.transaction("cards", "readwrite").objectStore("cards").add(card).onsuccess = () => {
+            syncLocalToCloud(); // <-- Tự động đồng bộ lên mạng khi Thêm từ
+            r();
+        };
     });
 }
 function updateCardInDB(card) {
     return new Promise(r => {
-        db.transaction("cards", "readwrite").objectStore("cards").put(card).onsuccess = () => r();
+        db.transaction("cards", "readwrite").objectStore("cards").put(card).onsuccess = () => {
+            syncLocalToCloud(); // <-- Tự động đồng bộ lên mạng khi Sửa/Ôn tập từ
+            r();
+        };
     });
 }
 function deleteCardFromDB(id) {
     return new Promise(r => {
-        db.transaction("cards", "readwrite").objectStore("cards").delete(id).onsuccess = () => r();
+        db.transaction("cards", "readwrite").objectStore("cards").delete(id).onsuccess = () => {
+            syncLocalToCloud(); // <-- Tự động đồng bộ lên mạng khi Xóa từ
+            r();
+        };
     });
 }
 
-// 9. IMPORT / EXPORT DỮ LIỆU FILE JSON
+// ==========================================
+// 9. IMPORT / EXPORT DỮ LIỆU FILE JSON TRUYỀN THỐNG
+// ==========================================
 function triggerImport() { document.getElementById("import-file").click(); }
 async function handleImport(event) {
     const file = event.target.files[0];
@@ -545,7 +607,7 @@ async function handleImport(event) {
         try {
             const cards = JSON.parse(e.target.result);
             for (let card of cards) {
-                delete card.id; // Để DB tự cấp ID tăng tự động mới cho máy hiện tại
+                delete card.id; 
                 card.nextReview = card.nextReview || Date.now();
                 card.interval = card.interval || 0;
                 await addCardToDB(card);
@@ -567,25 +629,25 @@ async function exportData() {
     downloadAnchor.remove();
 }
 
-// --- LOGIC CHUYỂN ĐỔI GIAO DIỆN SÁNG / TỐI (DARK MODE) ---
+// ==========================================
+// 10. LOGIC CHUYỂN ĐỔI GIAO DIỆN SÁNG / TỐI (DARK MODE)
+// ==========================================
 function toggleTheme() {
     const isDark = document.body.classList.toggle("dark-theme");
-    // Lưu lựa chọn của người dùng vào LocalStorage để lần sau mở app tự nhớ
     localStorage.setItem("theme", isDark ? "dark" : "light");
 }
 
-// Hàm tự động kiểm tra cài đặt giao diện cũ khi vừa mở App
 function applySavedTheme() {
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
         document.body.classList.add("dark-theme");
     }
 }
-
-// Gọi hàm kiểm tra giao diện ngay khi file JS được load
 applySavedTheme();
 
-// --- LOGIC TỰ ĐỘNG TRA TỪ VÀ ĐIỀN NHANH (QUICK FILL / AUTO-SUGGEST) ---
+// ==========================================
+// 11. LOGIC TỰ ĐỘNG TRA TỪ VÀ ĐIỀN NHANH (QUICK FILL / SERVICE WORKER)
+// ==========================================
 async function autoSuggestWord() {
     const wordInput = document.getElementById("form-word").value.trim();
     const btnSearch = document.querySelector(".btn-search");
@@ -595,36 +657,28 @@ async function autoSuggestWord() {
         return;
     }
 
-    // Hiển thị trạng thái đang tải dữ liệu để người dùng biết
     btnSearch.innerText = "⏳ Đang tra...";
     btnSearch.disabled = true;
 
     try {
-        // 1. Gọi API lấy phát âm IPA và Ví dụ câu (Free Dictionary API)
         const dictResponse = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(wordInput)}`);
-        
-        // 2. Gọi API Dịch nghĩa sang Tiếng Việt (MyMemory Translate API - Tốc độ cao, miễn phí)
         const transResponse = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(wordInput)}&langpair=en|vi`);
 
         let ipa = "";
         let example = "";
         let meaning = "";
 
-        // Xử lý dữ liệu từ điển (IPA & Ví dụ)
         if (dictResponse.ok) {
             const dictData = await dictResponse.json();
             const entry = dictData[0];
 
-            // Lấy phiên âm IPA
             if (entry.phonetic) {
                 ipa = entry.phonetic;
             } else if (entry.phonetics && entry.phonetics.length > 0) {
-                // Tìm kiếm trong mảng phonetics nếu thuộc tính phonetic ở trên trống
                 const validIpa = entry.phonetics.find(p => p.text);
                 if (validIpa) ipa = validIpa.text;
             }
 
-            // Tìm kiếm 1 câu ví dụ mẫu ngắn trong các tầng nghĩa
             if (entry.meanings) {
                 for (let m of entry.meanings) {
                     if (m.definitions) {
@@ -638,17 +692,14 @@ async function autoSuggestWord() {
             }
         }
 
-        // Xử lý dữ liệu dịch thuật (Nghĩa tiếng Việt)
         if (transResponse.ok) {
             const transData = await transResponse.json();
             if (transData.responseData && transData.responseData.translatedText) {
                 meaning = transData.responseData.translatedText;
-                // Chuẩn hóa chữ cái đầu thành chữ thường cho đẹp nếu cần
                 meaning = meaning.replace(/^\w/, c => c.toLowerCase());
             }
         }
 
-        // 3. Điền tự động vào các ô nhập liệu trên giao diện
         if (ipa) document.getElementById("form-ipa").value = ipa;
         if (meaning) document.getElementById("form-meaning").value = meaning;
         if (example) document.getElementById("form-example").value = example;
@@ -661,17 +712,16 @@ async function autoSuggestWord() {
         console.error("Lỗi kết nối mạng hoặc API:", error);
         alert("Có lỗi xảy ra khi tra từ tự động. Vui lòng kiểm tra kết nối mạng!");
     } finally {
-        // Trả lại trạng thái ban đầu cho nút bấm
         btnSearch.innerText = "🔍 Tra nhanh";
         btnSearch.disabled = false;
     }
 
-    // Đăng ký Service Worker để chạy ứng dụng trên điện thoại (PWA)
+    // Đăng ký Service Worker nằm gọn gàng bên trong đuôi hàm của bạn
     if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('Service Worker đã sẵn sàng!', reg.scope))
-            .catch(err => console.log('Lỗi đăng ký Service Worker:', err));
-    });
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('Service Worker đã sẵn sàng!', reg.scope))
+                .catch(err => console.log('Lỗi đăng ký Service Worker:', err));
+        });
     }
 }

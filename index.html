@@ -61,6 +61,10 @@
                         <button onclick="exportToCSV()" style="flex: 1; background: #27ae60; color: white;">Excel 📊 Xuất CSV</button>
                 </div>
 
+                <button onclick="pullCloudToLocal()" style="background: #00b894; color: white; padding: 10px 15px; border-radius: 8px; border: none; font-weight: bold; margin-top: 10px; cursor: pointer;">
+                        ☁️ Khôi phục từ đám mây
+                </button>
+
 
                 <input type="file" id="import-csv-file" style="display:none" accept=".csv" onchange="handleCSVImport(event)">
                 <input type="file" id="import-file" style="display:none" accept=".json" onchange="handleImport(event)">
@@ -148,6 +152,9 @@
                     <input type="text" id="search-word-input" oninput="handleSearchInput()" placeholder="🔍 Nhập từ hoặc nghĩa để tìm nhanh..." style="margin-bottom: 0; padding: 10px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); width: 100%; font-size: 0.9rem;">
                     <button onclick="clearSearch()" style="background: var(--bg); border: none; padding: 0 12px; border-radius: 10px; cursor: pointer; color: var(--text-sub); font-weight: bold;">✕</button>
                 </div>
+
+                <div id="pagination-container" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 10px;">
+                    </div>
                 <ul id="words-list"></ul>
             </section>
         </div>
@@ -184,6 +191,8 @@
         </div>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="gamification.js"></script>
     <script src="analytics.js"></script>
