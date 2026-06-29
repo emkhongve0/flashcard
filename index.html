@@ -55,7 +55,16 @@
                     <button onclick="triggerImport()">📥 Nhập Data (JSON)</button>
                     <button onclick="exportData()">📤 Xuất Data (JSON)</button>
                 </div>
+
+                <div style="display: flex; gap: 8px;">
+                        <button onclick="document.getElementById('import-csv-file').click()" style="flex: 1; background: #2ecc71; color: white;">Excel 📊 Nhập CSV</button>
+                        <button onclick="exportToCSV()" style="flex: 1; background: #27ae60; color: white;">Excel 📊 Xuất CSV</button>
+                </div>
+
+
+                <input type="file" id="import-csv-file" style="display:none" accept=".csv" onchange="handleCSVImport(event)">
                 <input type="file" id="import-file" style="display:none" accept=".json" onchange="handleImport(event)">
+                
             </div>
         </div>
 
@@ -73,6 +82,15 @@
                 <button id="btn-autoplay" onclick="toggleAutoPlay()" style="background: var(--primary-light); color: var(--primary); border: none; padding: 10px 20px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: all 0.2s;">⏱️ Lướt rảnh tay</button>
             </div>
 
+            <!-- KHU VỰC ĐIỀU KHIỂN TRÊN TAB HỌC (BỔ SUNG CÔNG TẮC GÕ CHỮ) -->
+            <div style="text-align: center; margin-bottom: 15px; display: flex; justify-content: center; gap: 15px; align-items: center;">
+                <button id="btn-autoplay" onclick="toggleAutoPlay()" style="background: var(--primary-light); color: var(--primary); border: none; padding: 10px 18px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; cursor: pointer;">⏱️ Lướt rảnh tay</button>
+                
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 700; color: var(--text-sub); cursor: pointer;">
+                    <input type="checkbox" id="typing-toggle-checkbox" onchange="toggleTypingMode()" style="cursor: pointer;"> ✍️ Chế độ gõ chữ
+                </label>
+            </div>
+
             <main class="card-container">
                 <div class="flashcard" id="flashcard" onclick="flipCard()">
                     <div class="card-face card-front">
@@ -80,6 +98,12 @@
                         <h2 id="word-display">Loading...</h2>
                         <p id="ipa-display" class="ipa">/ipa/</p>
                         <button class="audio-btn" onclick="playAudio(event)">🔊 Nghe</button>
+                        <!-- VÙNG NHẬP LIỆU CHẾ ĐỘ GÕ CHỮ MỚI BỔ SUNG (MẶC ĐỊNH ẨN) -->
+                    <div id="typing-area" class="hidden" style="margin-top: 20px; width: 100%; padding: 0 15px; box-sizing: border-box;" onclick="event.stopPropagation();">
+                        <input type="text" id="typing-input" placeholder="Gõ từ tiếng Anh vào đây..." style="width: 100%; padding: 12px; border-radius: 10px; border: 2px solid var(--primary-light); text-align: center; font-size: 1.1rem; font-weight: bold; outline: none; background: var(--bg);">
+                        <button onclick="checkSpelling()" style="width: 100%; margin-top: 8px; background: var(--primary); color: white; border: none; padding: 10px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">Kiểm tra chính tả</button>
+                        <div id="typing-result" style="margin-top: 8px; font-size: 0.85rem;"></div>
+                    </div>
                         <p class="hint">Chạm để xem nghĩa</p>
                     </div>
                     <div class="card-face card-back">
@@ -166,6 +190,8 @@
     <script src="search.js"></script> <script src="app.js"></script>
     <script src="autoplay.js"></script> <script src="app.js"></script>
     <script src="reverse.js"></script> <script src="app.js"></script>
+    <script src="typing.js"></script>
+    <script src="excel.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

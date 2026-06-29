@@ -116,6 +116,45 @@ function showNextCard() {
     const audioBtn = document.querySelector(".audio-btn");
     const meaningEl = document.getElementById("meaning-display");
     const exampleEl = document.getElementById("example-display");
+    const typingArea = document.getElementById("typing-area");
+
+    // Xóa trắng ô gõ chữ cũ và dòng thông báo kết quả cũ
+    if (document.getElementById("typing-input")) document.getElementById("typing-input").value = "";
+    if (document.getElementById("typing-result")) document.getElementById("typing-result").innerText = "";
+
+    // KIỂM TRA CHẾ ĐỘ GÕ CHỮ (TYPING MODE)
+    if (typeof isTypingMode !== "undefined" && isTypingMode === true) {
+        typingArea.classList.remove("hidden"); // Hiện ô gõ chữ
+        
+        // Mặt trước: Ẩn từ tiếng Anh, bắt người dùng nhìn Nghĩa để tự gõ từ
+        wordEl.innerText = currentCard.meaning;
+        ipaEl.innerText = "Hãy gõ từ tiếng Anh tương ứng chính xác...";
+        audioBtn.style.display = "none"; // Giấu loa tránh lộ âm thanh phát âm đáp án
+
+        // Mặt sau: Hiện từ gốc, phiên âm, ví dụ để đối chiếu
+        meaningEl.innerHTML = `<span style="font-size: 2.2rem; font-weight: 800; color: var(--primary);">${currentCard.word}</span>`;
+        meaningEl.innerHTML += `<p class="ipa" style="margin-top: 5px;">${currentCard.ipa || ''}</p>`;
+        meaningEl.innerHTML += `<button class="audio-btn" onclick="playAudio(event)" style="display:inline-block; margin-top:8px; padding:6px 12px; font-size:0.8rem;">🔊 Nghe phát âm</button>`;
+        exampleEl.innerText = currentCard.example || "Không có ví dụ.";
+
+    } else {
+        // CHẾ ĐỘ THƯỜNG (ANH -> VIỆT) HOẶC ĐẢO CHIỀU (Bảo lưu logic cũ nếu không bật typing)
+        typingArea.classList.add("hidden"); // Ẩn ô gõ chữ
+
+        if (typeof isReverseMode !== "undefined" && isReverseMode === true) {
+            wordEl.innerText = currentCard.meaning;
+            ipaEl.innerText = "Nghĩ từ tiếng Anh tương ứng...";
+            audioBtn.style.display = "none";
+            meaningEl.innerHTML = `<span style="font-size: 2.2rem; font-weight: 800; color: var(--primary);">${currentCard.word}</span> <p class="ipa">${currentCard.ipa || ''}</p>`;
+            exampleEl.innerText = currentCard.example || "Không có ví dụ.";
+        } else {
+            wordEl.innerText = currentCard.word;
+            ipaEl.innerText = currentCard.ipa || "/.../";
+            audioBtn.style.display = "inline-block";
+            meaningEl.innerText = currentCard.meaning;
+            exampleEl.innerText = currentCard.example || "Không có ví dụ.";
+        }
+    }
 
     // KIỂM TRA TRẠNG THÁI ĐẢO CHIỀU THẺ (Xử lý thông minh)
     if (typeof isReverseMode !== "undefined" && isReverseMode === true) {
