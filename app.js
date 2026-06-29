@@ -248,9 +248,43 @@ async function toggleStar(event) {
 
 function playAudio(event) {
     event.stopPropagation();
-    if (!currentCard) return;
+    if (!currentCard || !currentCard.word) return;
+
+    // Tắt các âm thanh đang đọc dở để tránh bị nói đè lên nhau
+    window.speechSynthesis.cancel();
+
     const utterance = new SpeechSynthesisUtterance(currentCard.word);
+    
+    // 1. Cấu hình các thông số cơ bản cho giọng Mỹ chuẩn
     utterance.lang = 'en-US';
+    utterance.rate = 0.9;  // Tốc độ đọc (0.9 là vừa vặn, dễ nghe để học từ vựng)
+    utterance.pitch = 1.0; // Độ cao của giọng
+
+    // 2. LOGIC THÔNG MINH ÉP IPHONE DÙNG GIỌNG GỐC TIẾNG ANH (Sửa lỗi ngọng trên iOS)
+    if (typeof window.speechSynthesis.getVoices === "function") {
+        const voices = window.speechSynthesis.getVoices();
+        
+        // Tìm các giọng nói tiếng Anh Mỹ (en-US) chất lượng cao trong iPhone
+        // Ưu tiên tìm giọng "Samantha", "Siri" hoặc giọng chứa chữ "Google" nếu dùng Chrome
+        let selectedVoice = voices.find(v => v.lang.includes('en-US') && (v.name.includes('Samantha') || v.name.includes('Siri')));
+        
+        // Nếu không có Samantha/Siri, lấy đại một giọng en-US bất kỳ
+        if (!selectedVoice) {
+            selectedVoice = voices.find(v => v.lang.includes('en-US'));
+        }
+        
+        // Nếu vẫn không thấy en-US (hy hữu), lấy giọng tiếng Anh chung (en-) như Anh-Anh (en-GB)
+        if (!selectedVoice) {
+            selectedVoice = voices.find(v => v.lang.startsWith('en-'));
+        }
+
+        // Gán giọng chuẩn tìm được vào bộ phát âm
+        if (selectedVoice) {
+            utterance.voice = selectedVoice;
+        }
+    }
+
+    // Kích hoạt phát âm
     window.speechSynthesis.speak(utterance);
 }
 
