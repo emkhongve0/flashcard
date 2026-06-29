@@ -68,11 +68,41 @@ async function refreshQueue() {
     if (typeof currentSelectedDeck !== "undefined" && currentSelectedDeck !== "all") {
         cards = cards.filter(c => c.deck === currentSelectedDeck);
     }
+
+    // ĐỌC TIẾN TRÌNH CŨ TỪ LOCALSTORAGE
+    const savedQueue = localStorage.getItem("saved_review_queue");
+    const savedCurrentCardId = localStorage.getItem("saved_current_card_id");
+    const savedDeckContext = localStorage.getItem("saved_deck_context") || "all";
+
+    // Khôi phục lại nếu có hàng đợi cũ đang học dở và cùng đúng Chủ đề (Deck) đang chọn
+    if (savedQueue && savedDeckContext === (currentSelectedDeck || "all")) {
+        try {
+            reviewQueue = JSON.parse(savedQueue);
+            isReviewMode = localStorage.getItem("saved_review_mode") === "true";
+            
+            if (savedCurrentCardId) {
+                // Ép kiểu ID về Number nếu ID trong DB của bạn là số tăng tự động
+                const numericId = Number(savedCurrentCardId);
+                currentCard = cards.find(c => c.id === numericId || c.id === savedCurrentCardId) || reviewQueue[0];
+            } else {
+                currentCard = reviewQueue[0];
+            }
+
+            // Cập nhật con số hiển thị lên giao diện thanh trạng thái
+            document.getElementById("review-count").innerText = isReviewMode ? reviewQueue.length : `Tự do (${reviewQueue.length})`;
+            const masteredCount = cards.filter(c => c.interval >= 14).length;
+            document.getElementById("mastered-count").innerText = masteredCount;
+
+            renderCurrentCardState(); 
+            return; // Dừng lại tại đây, lấy tiến trình cũ học tiếp
+        } catch (e) {
+            console.error("Lỗi đồng bộ bộ nhớ, khởi tạo hàng đợi mới:", e);
+        }
+    }
     
-    // Lọc từ đến hạn kiểm tra dựa theo thuật toán SRS
+    // NẾU KHÔNG CÓ TIẾN TRÌNH CŨ: Tiến hành tính toán hàng đợi mới từ đầu như cũ
     reviewQueue = cards.filter(c => c.nextReview <= now);
     
-    // Đếm số từ đã thuộc hẳn trong chủ đề này (Chuỗi ngày lớn hơn hoặc bằng 14 ngày)
     const masteredCount = cards.filter(c => c.interval >= 14).length;
     document.getElementById("mastered-count").innerText = masteredCount;
 
@@ -80,118 +110,132 @@ async function refreshQueue() {
         isReviewMode = true;
         document.getElementById("review-count").innerText = reviewQueue.length;
     } else {
-        // Nếu không còn từ nào cần ôn, nạp toàn bộ kho từ của CHỦ ĐỀ ĐÓ ra để học tự do
         isReviewMode = false;
         reviewQueue = [...cards];
         reviewQueue.sort(() => Math.random() - 0.5); 
         document.getElementById("review-count").innerText = cards.length > 0 ? `Tự do (${reviewQueue.length})` : "0";
     }
 
-    showNextCard();
+    if (reviewQueue.length > 0) {
+        currentCard = reviewQueue[0];
+    } else {
+        currentCard = null;
+    }
+
+    saveCurrentProgress();
+    renderCurrentCardState();
 }
 
-// 4. HIỂN THỊ TỪ TIẾP THEO LÊN GIAO DIỆN (ĐÃ ĐỒNG BỘ ĐẢO CHIỀU THEO CHỦ ĐỀ)
+// Hàm bổ trợ: Ghi tiến trình hiện tại vào LocalStorage
+function saveCurrentProgress() {
+    localStorage.setItem("saved_review_queue", JSON.stringify(reviewQueue));
+    localStorage.setItem("saved_current_card_id", currentCard ? currentCard.id : "");
+    localStorage.setItem("saved_review_mode", isReviewMode);
+    localStorage.setItem("saved_deck_context", currentSelectedDeck || "all");
+}
+
+// 4. HIỂN THỊ TỪ TIẾP THEO LÊN GIAO DIỆN (ĐÃ TÁCH BIỆT LOGIC HIỂN THỊ)
 function showNextCard() {
     if (reviewQueue.length === 0) {
         currentCard = null;
-        document.getElementById("word-display").innerText = "🎉 Hoàn thành!";
-        document.getElementById("ipa-display").innerText = "Hẹn gặp lại ngày mai";
-        document.getElementById("meaning-display").innerText = "Bạn đã dọn sạch từ vựng cần ôn hôm nay.";
-        document.getElementById("example-display").innerText = "";
-        document.querySelector(".audio-btn").style.display = "none";
-        document.getElementById("star-btn").style.display = "none";
-        return;
+        localStorage.removeItem("saved_review_queue");
+        localStorage.removeItem("saved_current_card_id");
+    } else {
+        currentCard = reviewQueue[0];
     }
-
-    currentCard = reviewQueue[0];
     
-    // Cập nhật trạng thái ngôi sao từ khó
-    const starBtn = document.getElementById("star-btn");
-    starBtn.style.display = "block";
-    starBtn.innerText = currentCard.isStarred ? "★" : "☆";
-    starBtn.classList.toggle("active", currentCard.isStarred);
+    renderCurrentCardState();
+    saveCurrentProgress(); // Đồng bộ ngay sau khi đổi thẻ
+}
 
+    // Hàm chuyên trách xử lý giao diện thẻ (Lồng ghép chuẩn xác Chế độ gõ chữ và Đảo chiều)
+function renderCurrentCardState() {
     const wordEl = document.getElementById("word-display");
     const ipaEl = document.getElementById("ipa-display");
     const audioBtn = document.querySelector(".audio-btn");
     const meaningEl = document.getElementById("meaning-display");
     const exampleEl = document.getElementById("example-display");
     const typingArea = document.getElementById("typing-area");
+    const starBtn = document.getElementById("star-btn");
 
-    // Xóa trắng ô gõ chữ cũ và dòng thông báo kết quả cũ
+    if (!currentCard) {
+        if (wordEl) wordEl.innerText = "🎉 Hoàn thành!";
+        if (ipaEl) ipaEl.innerText = "Hẹn gặp lại ngày mai";
+        if (meaningEl) meaningEl.innerText = "Bạn đã dọn sạch từ vựng cần ôn hôm nay.";
+        if (exampleEl) exampleEl.innerText = "";
+        if (audioBtn) audioBtn.style.display = "none";
+        if (starBtn) starBtn.style.display = "none";
+        if (typingArea) typingArea.classList.add("hidden");
+        return;
+    }
+    
+    // Hiển thị và xử lý ngôi sao từ khó
+    if (starBtn) {
+        starBtn.style.display = "block";
+        starBtn.innerText = currentCard.isStarred ? "★" : "☆";
+        starBtn.className = currentCard.isStarred ? "star-icon active" : "star-icon";
+    }
+
+    // Reset sạch ô nhập chính tả của phiên học trước
     if (document.getElementById("typing-input")) document.getElementById("typing-input").value = "";
     if (document.getElementById("typing-result")) document.getElementById("typing-result").innerText = "";
 
-    // KIỂM TRA CHẾ ĐỘ GÕ CHỮ (TYPING MODE)
+    // TRƯỜNG HỢP 1: ĐANG BẬT CHẾ ĐỘ GÕ CHỮ (TYPING MODE)
     if (typeof isTypingMode !== "undefined" && isTypingMode === true) {
-        typingArea.classList.remove("hidden"); // Hiện ô gõ chữ
-        
-        // Mặt trước: Ẩn từ tiếng Anh, bắt người dùng nhìn Nghĩa để tự gõ từ
-        wordEl.innerText = currentCard.meaning;
-        ipaEl.innerText = "Hãy gõ từ tiếng Anh tương ứng chính xác...";
-        audioBtn.style.display = "none"; // Giấu loa tránh lộ âm thanh phát âm đáp án
+        if (typingArea) typingArea.classList.remove("hidden");
+        if (wordEl) wordEl.innerText = currentCard.meaning;
+        if (ipaEl) ipaEl.innerText = "Hãy gõ từ tiếng Anh tương ứng chính xác...";
+        if (audioBtn) audioBtn.style.display = "none";
 
-        // Mặt sau: Hiện từ gốc, phiên âm, ví dụ để đối chiếu
-        meaningEl.innerHTML = `<span style="font-size: 2.2rem; font-weight: 800; color: var(--primary);">${currentCard.word}</span>`;
-        meaningEl.innerHTML += `<p class="ipa" style="margin-top: 5px;">${currentCard.ipa || ''}</p>`;
-        meaningEl.innerHTML += `<button class="audio-btn" onclick="playAudio(event)" style="display:inline-block; margin-top:8px; padding:6px 12px; font-size:0.8rem;">🔊 Nghe phát âm</button>`;
-        exampleEl.innerText = currentCard.example || "Không có ví dụ.";
+        if (meaningEl) {
+            meaningEl.innerHTML = `
+                <span style="font-size: 2.2rem; font-weight: 800; color: var(--primary);">${currentCard.word}</span>
+                <p class="ipa" style="margin-top: 5px;">${currentCard.ipa || ''}</p>
+                <button class="audio-btn" onclick="playAudio(event)" style="display:inline-block; margin-top:8px; padding:6px 12px; font-size:0.8rem;">🔊 Nghe phát âm</button>
+            `;
+        }
+        if (exampleEl) exampleEl.innerText = currentCard.example || "Không có ví dụ.";
 
     } else {
-        // CHẾ ĐỘ THƯỜNG (ANH -> VIỆT) HOẶC ĐẢO CHIỀU (Bảo lưu logic cũ nếu không bật typing)
-        typingArea.classList.add("hidden"); // Ẩn ô gõ chữ
+        // TRƯỜNG HỢP 2: KHÔNG BẬT GÕ CHỮ (HIỂN THỊ FLASHCARD THƯỜNG HOẶC ĐẢO CHIỀU)
+        if (typingArea) typingArea.classList.add("hidden");
 
         if (typeof isReverseMode !== "undefined" && isReverseMode === true) {
-            wordEl.innerText = currentCard.meaning;
-            ipaEl.innerText = "Nghĩ từ tiếng Anh tương ứng...";
-            audioBtn.style.display = "none";
-            meaningEl.innerHTML = `<span style="font-size: 2.2rem; font-weight: 800; color: var(--primary);">${currentCard.word}</span> <p class="ipa">${currentCard.ipa || ''}</p>`;
-            exampleEl.innerText = currentCard.example || "Không có ví dụ.";
+            // Chế độ đảo chiều Việt -> Anh
+            if (wordEl) wordEl.innerText = currentCard.meaning;
+            if (ipaEl) ipaEl.innerText = "Nghĩ từ tiếng Anh tương ứng...";
+            if (audioBtn) audioBtn.style.display = "none";
+
+            if (meaningEl) {
+                meaningEl.innerHTML = `
+                    <span style="font-size: 2.2rem; font-weight: 800; color: var(--primary);">${currentCard.word}</span>
+                    <p class="ipa" style="margin-top: 5px;">${currentCard.ipa || ''}</p>
+                    <button class="audio-btn" onclick="playAudio(event)" style="display:inline-block; margin-top:8px; padding:6px 12px; font-size:0.8rem;">🔊 Nghe phát âm</button>
+                `;
+            }
+            if (exampleEl) exampleEl.innerText = currentCard.example || "Không có ví dụ.";
         } else {
-            wordEl.innerText = currentCard.word;
-            ipaEl.innerText = currentCard.ipa || "/.../";
-            audioBtn.style.display = "inline-block";
-            meaningEl.innerText = currentCard.meaning;
-            exampleEl.innerText = currentCard.example || "Không có ví dụ.";
+            // Chế độ mặc định Anh -> Việt
+            if (wordEl) wordEl.innerText = currentCard.word;
+            if (ipaEl) ipaEl.innerText = currentCard.ipa || "/.../";
+            if (audioBtn) audioBtn.style.display = "inline-block";
+            if (meaningEl) meaningEl.innerText = currentCard.meaning;
+            if (exampleEl) exampleEl.innerText = currentCard.example || "Không có ví dụ.";
         }
-    }
-
-    // KIỂM TRA TRẠNG THÁI ĐẢO CHIỀU THẺ (Xử lý thông minh)
-    if (typeof isReverseMode !== "undefined" && isReverseMode === true) {
-        // --- CHẾ ĐỘ ĐẢO CHIỀU: VIỆT -> ANH ---
-        // Mặt trước: Hiện Nghĩa tiếng Việt
-        wordEl.innerText = currentCard.meaning;
-        ipaEl.innerText = "Nghĩ từ tiếng Anh tương ứng...";
-        audioBtn.style.display = "none"; // Ẩn nút loa ở mặt trước kẻo lộ âm thanh đáp án
-
-        // Mặt sau: Hiện từ gốc Tiếng Anh + Phiên âm + Ví dụ mẫu đầy đủ
-        meaningEl.innerHTML = `<span style="font-size: 2.2rem; font-weight: 800; color: var(--primary);">${currentCard.word}</span>`;
-        meaningEl.innerHTML += `<p class="ipa" style="margin-top: 5px;">${currentCard.ipa || ''}</p>`;
-        
-        // Chèn thêm nút phát âm loa nhỏ vào ngay mặt sau để lật xong có thể bấm nghe nhanh
-        meaningEl.innerHTML += `<button class="audio-btn" onclick="playAudio(event)" style="display:inline-block; margin-top:8px; padding:6px 12px; font-size:0.8rem;">🔊 Nghe phát âm</button>`;
-        
-        exampleEl.innerText = currentCard.example || "Không có ví dụ.";
-    } else {
-        // --- CHẾ ĐỘ MẶC ĐỊNH: ANH -> VIỆT ---
-        // Mặt trước: Hiện từ gốc Tiếng Anh
-        wordEl.innerText = currentCard.word;
-        ipaEl.innerText = currentCard.ipa || "/.../";
-        audioBtn.style.display = "inline-block";
-
-        // Mặt sau: Hiện nghĩa Tiếng Việt + Ví dụ câu
-        meaningEl.innerText = currentCard.meaning;
-        exampleEl.innerText = currentCard.example || "Không có ví dụ.";
     }
 }
 
 function flipCard() {
     if (!currentCard) return;
     const cardEl = document.getElementById("flashcard");
+    if (!cardEl) return;
     cardEl.classList.toggle("is-flipped");
-    document.getElementById("controls").classList.toggle("hidden", !cardEl.classList.contains("is-flipped"));
+    
+    const controls = document.getElementById("controls");
+    if (controls) {
+        controls.classList.toggle("hidden", !cardEl.classList.contains("is-flipped"));
+    }
 }
-
 // 5. ĐÁNH DẤU SAO / TỪ KHÓ TRÊN THẺ
 async function toggleStar(event) {
     event.stopPropagation(); // Ngăn hành vi lật thẻ khi bấm vào ngôi sao
@@ -239,7 +283,7 @@ async function submitSRS(days) {
     }
 }
 
-// 6. THAO TÁC QUẢN LÝ (CRUD - THÊM / SỬA / XÓA)
+// 6. THAO TÁC QUẢN LÝ (CRUD - THÊM / SỬA / XÓA) - ĐÃ BỔ SUNG ĐỒNG BỘ GỢI Ý CHỦ ĐỀ
 async function saveFormCard() {
     const id = document.getElementById("form-id").value;
     const word = document.getElementById("form-word").value.trim();
@@ -262,11 +306,49 @@ async function saveFormCard() {
         await addCardToDB(newCard);
     }
 
-    if (typeof refreshDeckSelector === "function") refreshDeckSelector();
+    // BƯỚC 3: CẬP NHẬT GỢI Ý THÔNG MINH CHO CẢ HEADER VÀ FORM DATALIST NGAY LẬP TỨC
+    if (typeof refreshDeckSelector === "function") {
+        await refreshDeckSelector();
+    }
 
     clearForm();
     await renderWordsList();
     alert("Đã lưu từ vựng!");
+}
+
+async function editCard(id) {
+    const card = await getCardById(id);
+    if (!card) return;
+    document.getElementById("form-id").value = card.id;
+    document.getElementById("form-word").value = card.word;
+    document.getElementById("form-ipa").value = card.ipa;
+    document.getElementById("form-meaning").value = card.meaning;
+    document.getElementById("form-example").value = card.example;
+    // Tự động cuộn mượt lên khung nhập liệu để người dùng dễ thao tác
+    document.querySelector(".form-container").scrollIntoView({ behavior: 'smooth' });
+    document.getElementById("form-deck").value = card.deck || "";
+}
+
+async function deleteCard(id) {
+    if (confirm("Bạn có chắc chắn muốn xóa từ này khỏi kho dữ liệu không?")) {
+        await deleteCardFromDB(id);
+        
+        // CẬP NHẬT LẠI GỢI Ý (Nếu xóa từ cuối cùng của chủ đề đó, chủ đề sẽ biến mất khỏi gợi ý)
+        if (typeof refreshDeckSelector === "function") {
+            await refreshDeckSelector();
+        }
+        
+        await renderWordsList();
+    }
+}
+
+function clearForm() {
+    document.getElementById("form-id").value = "";
+    document.getElementById("form-word").value = "";
+    document.getElementById("form-ipa").value = "";
+    document.getElementById("form-meaning").value = "";
+    document.getElementById("form-example").value = "";
+    document.getElementById("form-deck").value = "";
 }
 
 async function editCard(id) {
@@ -299,22 +381,51 @@ function clearForm() {
 }
 
 async function renderWordsList() {
+    // 1. Lấy chuỗi từ khóa tìm kiếm người dùng nhập vào (nếu có)
     const searchInput = document.getElementById("search-word-input");
-    if (searchInput) searchInput.value = "";
-    const cards = await getAllCards();
+    const keyword = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    
+    // 2. Lấy toàn bộ kho từ vựng từ cơ sở dữ liệu IndexedDB
+    let cards = await getAllCards();
     const listEl = document.getElementById("words-list");
+    if (!listEl) return;
     listEl.innerHTML = "";
 
-    // LỌC THEO BỘ TỪ ĐANG CHỌN
+    // 3. BỘ LỌC CHỦ ĐỀ: Nếu đang chọn một chủ đề cụ thể, chỉ lấy từ của chủ đề đó
     if (typeof currentSelectedDeck !== "undefined" && currentSelectedDeck !== "all") {
         cards = cards.filter(c => c.deck === currentSelectedDeck);
     }
 
+    // 4. BỘ LỌC TÌM KIẾM: Nếu người dùng có gõ từ khóa, lọc theo Từ gốc, Phiên âm hoặc Giải nghĩa
+    if (keyword) {
+        cards = cards.filter(card => {
+            const word = (card.word || "").toLowerCase();
+            const ipa = (card.ipa || "").toLowerCase();
+            const meaning = (card.meaning || "").toLowerCase();
+            const deck = (card.deck || "").toLowerCase();
+            
+            return word.includes(keyword) || 
+                   ipa.includes(keyword) || 
+                   meaning.includes(keyword) ||
+                   deck.includes(keyword);
+        });
+    }
+
+    // 5. Nếu sau khi lọc không tìm thấy từ nào, hiển thị thông báo
+    if (cards.length === 0) {
+        listEl.innerHTML = `<li style="text-align: center; color: var(--text-sub); justify-content: center; padding: 20px;">🔍 Không tìm thấy từ vựng nào khớp với từ khóa.</li>`;
+        return;
+    }
+
+    // 6. Vẽ danh sách từ vựng ra giao diện HTML như cũ
     cards.forEach(card => {
-        const deckTag = card.deck ? `<span style="font-size:0.7rem; background:#e1bee7; color:#6a1b9a; padding:2px 6px; border-radius:4px; margin-left:5px;">${card.deck}</span>` : '';
+        const deckTag = card.deck ? `<span style="font-size:0.7rem; background:#e1bee7; color:#6a1b9a; padding:2px 6px; border-radius:4px; margin-left:5px; font-weight: bold;">${card.deck}</span>` : '';
         const li = document.createElement("li");
         li.innerHTML = `
-            <div><strong>${card.word}</strong> <small>${card.ipa || ''}</small> - ${card.meaning}</div>
+            <div>
+                <strong>${card.word}</strong> <small>${card.ipa || ''}</small> ${deckTag}
+                <div style="font-size: 0.9rem; color: var(--text-sub); margin-top: 2px;">${card.meaning}</div>
+            </div>
             <div class="list-actions">
                 <button class="btn-edit" onclick="editCard(${card.id})">✏️</button>
                 <button class="btn-delete" onclick="deleteCard(${card.id})">🗑️</button>

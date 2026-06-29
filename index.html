@@ -78,9 +78,6 @@
         </nav>
 
         <div id="tab-study" class="tab-content">
-            <div style="text-align: center; margin-bottom: 10px;">
-                <button id="btn-autoplay" onclick="toggleAutoPlay()" style="background: var(--primary-light); color: var(--primary); border: none; padding: 10px 20px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: all 0.2s;">⏱️ Lướt rảnh tay</button>
-            </div>
 
             <!-- KHU VỰC ĐIỀU KHIỂN TRÊN TAB HỌC (BỔ SUNG CÔNG TẮC GÕ CHỮ) -->
             <div style="text-align: center; margin-bottom: 15px; display: flex; justify-content: center; gap: 15px; align-items: center;">
@@ -124,7 +121,12 @@
                 <h3>Thêm / Sửa Từ Vựng</h3>
                 <input type="hidden" id="form-id">
 
-                <input type="text" id="form-deck" placeholder="Chủ đề / Bộ từ (Ví dụ: TOEIC, Giao tiếp)">
+                <div class="form-group">
+                <label for="form-deck">Chủ đề (Deck):</label>
+                <input type="text" id="form-deck" list="existing-decks-list" placeholder="Ví dụ: TOEIC, Cơ thể, Giao tiếp...">
+    
+                <datalist id="existing-decks-list"></datalist>
+                </div>
                 
                 <div class="search-group">
                     <input type="text" id="form-word" placeholder="Từ mới (Ví dụ: Apple)">
